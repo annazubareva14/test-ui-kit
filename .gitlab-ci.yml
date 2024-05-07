@@ -1,0 +1,40 @@
+stages:
+  - deploy
+  - build
+
+build:
+  stage: build
+  image: node:16.17.0
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - ./dist/**
+  allow_failure: false
+
+deploy:
+  stage: deploy
+  image: node:16.17.0
+  before_script:
+    - git remote remove origin
+    # Создаем авторизованный remote
+    - git remote add origin https://test-ui-kit:$CI_GITLAB_TOKEN@gitlab.com/test-ui-kit.git
+    # Подставляем наш полученный npm token
+    - npm config set //registry.npmjs.org/:_authToken $CI_NPM_TOKEN
+  script:
+    # Прокидываем name + email, чтобы gitlab не сыпал ошибки
+    - git config --global user.name "Anna Zubareva"
+    - git config --global user.email "annazubareva14@gmail.com"
+    # Вызываем наш скрипт, который инкрементирует версию
+    - node bumpVersion.js
+    # Добавляем и пушим наши изменения в ветку откуда стригерился pipeline
+    - git add ./package.json
+    - git commit -m "bump package.json version"
+    # Используем опцию gitlab -o ci.skip, для того, чтобы наш коммит не тригерил новый pipeline
+    - git push origin HEAD:$CI_COMMIT_REF_NAME -o ci.skip
+    # Публикуем наш пакет
+    - npm publish
+  rules:
+    - when: manual
+  allow_failure: false
